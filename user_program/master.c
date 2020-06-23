@@ -25,8 +25,6 @@ int main (int argc, char* argv[])
 	struct timeval end;
 	double trans_time; //calulate the time between the device is opened and it is closed
 
-	strcpy(file_name, argv[1]);
-	strcpy(method, argv[2]);
 
 	if( (dev_fd = open("/dev/master_device", O_RDWR)) < 0)
 	{
@@ -53,7 +51,6 @@ int main (int argc, char* argv[])
 		return 1;
 	}
 
-	char *src = NULL, *dst = NULL;
 
 	switch(method[0])
 	{
@@ -64,38 +61,16 @@ int main (int argc, char* argv[])
 				write(dev_fd, buf, ret);//write to the the device
 			}while(ret > 0);
 			break;
-		case 'm': // mmap
-			while(offset < file_size) {
-				if((src = mmap(NULL, PAGE_SIZE, PROT_READ, MAP_SHARED, file_fd, offset)) == (void *)-1) {
-					perror("can not map to input file\n");
-					return 1;
-				}
-				if((dst = mmap(NULL, PAGE_SIZE, PROT_WRITE, MAP_SHARED, dev_fd, offset)) == (void *)-1) {
-					perror("can not map to master device\n");
-					return 1;
-				}
-
-				int len = (offset + PAGE_SIZE > file_size ? file_size - offset : PAGE_SIZE);
-				memcpy(dst, src, len);
-				offset += len;
-
-				if(ioctl(dev_fd, 0x12345678, len) == -1) {
-					perror("ioctl server sending error\n");
-					return 1;
-				} 
-				munmap(src, PAGE_SIZE);
-			}
-			break;	
 	}
 
 	if(ioctl(dev_fd, 0x12345679) == -1) // end sending data, close the connection
 	{
-		perror("ioctl server exits error\n");
+		perror("ioclt server exits error\n");
 		return 1;
 	}
 	gettimeofday(&end, NULL);
-	trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.001;
-	printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time, file_size / 8);
+	trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
+	printf("Transmission time: %lf ms, File size: %d bytes\n", trans_time, file_size / 8);
 
 	close(file_fd);
 	close(dev_fd);

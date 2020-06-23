@@ -59,33 +59,13 @@ static mm_segment_t old_fs;
 static ksocket_t sockfd_cli;//socket to the master server
 static struct sockaddr_in addr_srv; //address of the master server
 
-// for mmap
-static int my_mmap(struct file *filp, struct vm_area_struct *vma);
-void mmap_open(struct vm_area_struct *vma) {
-	// do nothing
-} 
-void mmap_close(struct vm_area_struct *vma) {
-	// do nothing
-}
-
-/* TODO: make this func works normally or deprecate it
-
-static int mmap_fault(struct vm_fault *vmf, struct vm_area_struct *vma) {
-	vmf->page = virt_to_page(vma->vm_private_data);
-	get_page(vmf->page);
-	return 0;
-}
-
-*/
-
 //file operations
 static struct file_operations slave_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = slave_ioctl,
 	.open = slave_open,
 	.read = receive_msg,
-	.release = slave_close,
-	.mmap = my_mmap 
+	.release = slave_close
 };
 
 //device info
@@ -93,12 +73,6 @@ static struct miscdevice slave_dev = {
 	.minor = MISC_DYNAMIC_MINOR,
 	.name = "slave_device",
 	.fops = &slave_fops
-};
-
-// for mmap
-struct vm_operations_struct mmap_vm_ops = {
-	.open = mmap_open,
-	.close = mmap_close
 };
 
 static int __init slave_init(void)
@@ -189,7 +163,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			ret = 0;
 			break;
 		case slave_IOCTL_MMAP:
-			ret = krecv(sockfd_cli, file->private_data, PAGE_SIZE, 0); 
+
 			break;
 
 		case slave_IOCTL_EXIT:
@@ -227,16 +201,6 @@ ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp )
 	return len;
 }
 
-// for mmap
-static int my_mmap(struct file *filp, struct vm_area_struct *vma) {
-	if (remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff, vma->vm_end - vma->vm_start, vma->vm_page_prot))
-		return -EIO;
-	vma->vm_ops = &mmap_vm_ops;
-	vma->vm_flags |= VM_RESERVED;
-	vma->vm_private_data = filp->private_data;
-	mmap_open(vma);
-	return 0;
-}
 
 
 

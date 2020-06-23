@@ -22,10 +22,8 @@ int main (int argc, char* argv[])
 	struct timeval start;
 	struct timeval end;
 	double trans_time; //calulate the time between the device is opened and it is closed
+	char *kernel_address, *file_address;
 
-	strcpy(file_name, argv[1]);
-	strcpy(method, argv[2]);
-	strcpy(ip, argv[3]);
 
 	if( (dev_fd = open("/dev/slave_device", O_RDWR)) < 0)//should be O_RDWR for PROT_WRITE when mmap()
 	{
@@ -47,10 +45,6 @@ int main (int argc, char* argv[])
 
     write(1, "ioctl success\n", 14);
 
-	char *dst = NULL;
-	int res;
-	long mmap_size = sysconf(_SC_PAGE_SIZE);
-
 	switch(method[0])
 	{
 		case 'f'://fcntl : read()/write()
@@ -61,44 +55,23 @@ int main (int argc, char* argv[])
 				file_size += ret;
 			}while(ret > 0);
 			break;
-		case 'm':
-			while((res = read(dev_fd, buf, sizeof(buf))) > 0) {
-				if(file_size % mmap_size == 0) {
-					if(file_size) {
-						ioctl(dev_fd, 0x1234567a, (unsigned long)dst);
-						munmap(dst, mmap_size);
-					}
-
-					ftruncate(file_fd, file_size + mmap_size);
-					if((dst = mmap(NULL, mmap_size, PROT_WRITE, MAP_SHARED, file_fd, file_size)) == (void *)-1) {
-						perror("can not map to output file\n");
-						return 1;
-					}
-				}
-
-				memcpy(&dst[file_size % mmap_size], buf, res);
-				file_size += res;
-			}
-
-			ftruncate(file_fd, file_size);
-			ioctl(dev_fd, 0x1234567a, (unsigned long)dst);
-			munmap(dst, mmap_size);
-			break;
 	}
 
 
 
 	if(ioctl(dev_fd, 0x12345679) == -1)// end receiving data, close the connection
 	{
-		perror("ioctl client exits error\n");
+		perror("ioclt client exits error\n");
 		return 1;
 	}
 	gettimeofday(&end, NULL);
-	trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.001;
-	printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time, file_size / 8);
+	trans_time = (end.tv_sec - start.tv_sec)*1000 + (end.tv_usec - start.tv_usec)*0.0001;
+	printf("Transmission time: %lf ms, File size: %d bytes\n", trans_time, file_size / 8);
 
 
 	close(file_fd);
 	close(dev_fd);
 	return 0;
-} 
+}
+
+

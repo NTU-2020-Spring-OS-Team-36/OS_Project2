@@ -58,31 +58,13 @@ static mm_segment_t old_fs;
 static int addr_len;
 //static  struct mmap_info *mmap_msg; // pointer to the mapped data in this device
 
-// for mmap
-static int my_mmap(struct file *filp, struct vm_area_struct *vma);
-void mmap_open(struct vm_area_struct *vma) {
-	// do nothing
-} 
-void mmap_close(struct vm_area_struct *vma) {
-	// do nothing
-}
-/* TODO: make this func works normally or deprecate it
-
-static int mmap_fault(struct vm_fault *vmf) {
-	vmf->page = virt_to_page(vma->vm_private_data);
-	get_page(vmf->page);
-	return 0;
-}
-*/
-
 //file operations
 static struct file_operations master_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = master_ioctl,
 	.open = master_open,
 	.write = send_msg,
-	.release = master_close,
-	.mmap = my_mmap
+	.release = master_close
 };
 
 //device info
@@ -90,12 +72,6 @@ static struct miscdevice master_dev = {
 	.minor = MISC_DYNAMIC_MINOR,
 	.name = "master_device",
 	.fops = &master_fops
-};
-
-// for mmap
-static struct vm_operations_struct mmap_vm_ops = {
-	.open = mmap_open,
-	.close = mmap_close
 };
 
 static int __init master_init(void)
@@ -199,7 +175,6 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			ret = 0;
 			break;
 		case master_IOCTL_MMAP:
-			ret = ksend(sockfd_cli, file->private_data, ioctl_param, 0);
 			break;
 		case master_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)
@@ -236,16 +211,7 @@ static ssize_t send_msg(struct file *file, const char __user *buf, size_t count,
 
 }
 
-// for mmap
-static int my_mmap(struct file *filp, struct vm_area_struct *vma) {
-	if (remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff, vma->vm_end - vma->vm_start, vma->vm_page_prot))
-		return -EIO;
-	vma->vm_ops = &mmap_vm_ops;
-	vma->vm_flags |= VM_RESERVED;
-	vma->vm_private_data = filp->private_data;
-	mmap_open(vma);
-	return 0;
-}
+
 
 
 module_init(master_init);
