@@ -15,6 +15,6 @@ for FILE in $TEST_PATH/*; do
 	FILE_COUNT=$((FILE_COUNT + 1))
 done
 
-./user_program/master $FILE_COUNT $TEST_FILES $METHOD
+(./user_program/master $FILE_COUNT $TEST_FILES $METHOD) &
 ./user_program/slave $FILE_COUNT $OUTPUT_FIELS $METHOD $IP
 
