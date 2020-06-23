@@ -45,9 +45,10 @@ int main(int argc, char *argv[]) {
 
 	fprintf(stderr, "ioctl success\n");
 
-	for (int i = 0; i < n_files; i++) {
-		assert(clock_gettime(CLOCK_MONOTONIC, &start) == 0);
+	assert(clock_gettime(CLOCK_MONOTONIC, &start) == 0); 
 
+	int64_t tot_file_size = 0;
+	for (int i = 0; i < n_files; i++) { 
 		if ((file_fd = open(filename[i], O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0) {
 			perror("failed to open input file");
 			return errno;
@@ -80,12 +81,13 @@ int main(int argc, char *argv[]) {
 		{
 			perror("ioctl client exits error");
 			return errno;
-		}
+		} 
 
-		assert(clock_gettime(CLOCK_MONOTONIC, &end) == 0);
-
-		double trans_time = ts_diff_to_milli(&start, &end);
-		printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time,
-				file_size);
+		tot_file_size += file_size;
 	}
+
+	assert(clock_gettime(CLOCK_MONOTONIC, &end) == 0);
+	double trans_time = ts_diff_to_milli(&start, &end);
+	printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time,
+			tot_file_size);
 }
