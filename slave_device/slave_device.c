@@ -32,6 +32,8 @@
 
 #define BUF_SIZE 512
 
+#define MMAP_BUF_PAGES 1
+#define MMAP_BUF_SIZE PAGE_SIZE * MMAP_BUF_PAGES
 
 
 
@@ -55,28 +57,13 @@ int slave_open(struct inode *inode, struct file *filp);
 static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param);
 ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp );
 
+int slave_mmap(struct file *filp, struct vm_area_struct *vma);
+
 static mm_segment_t old_fs;
 static ksocket_t sockfd_cli;//socket to the master server
 static struct sockaddr_in addr_srv; //address of the master server
 
-// for mmap
-static int my_mmap(struct file *filp, struct vm_area_struct *vma);
-void mmap_open(struct vm_area_struct *vma) {
-	// do nothing
-} 
-void mmap_close(struct vm_area_struct *vma) {
-	// do nothing
-}
-
-/* TODO: make this func works normally or deprecate it
-
-static int mmap_fault(struct vm_fault *vmf, struct vm_area_struct *vma) {
-	vmf->page = virt_to_page(vma->vm_private_data);
-	get_page(vmf->page);
-	return 0;
-}
-
-*/
+static struct page *buffer;
 
 //file operations
 static struct file_operations slave_fops = {
@@ -85,7 +72,7 @@ static struct file_operations slave_fops = {
 	.open = slave_open,
 	.read = receive_msg,
 	.release = slave_close,
-	.mmap = my_mmap 
+	.mmap = slave_mmap
 };
 
 //device info
@@ -95,16 +82,12 @@ static struct miscdevice slave_dev = {
 	.fops = &slave_fops
 };
 
-// for mmap
-struct vm_operations_struct mmap_vm_ops = {
-	.open = mmap_open,
-	.close = mmap_close
-};
-
 static int __init slave_init(void)
 {
 	int ret;
 	file1 = debugfs_create_file("slave_debug", 0644, NULL, NULL, &slave_fops);
+
+	buffer = alloc_pages(GFP_KERNEL, MMAP_BUF_PAGES);
 
 	//register the device
 	if( (ret = misc_register(&slave_dev)) < 0){
@@ -189,9 +172,8 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			ret = 0;
 			break;
 		case slave_IOCTL_MMAP:
-			ret = krecv(sockfd_cli, file->private_data, PAGE_SIZE, 0); 
+			ret = krecv(sockfd_cli, page_to_virt(buffer), MMAP_BUF_SIZE, 0);
 			break;
-
 		case slave_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)
 			{
@@ -227,17 +209,18 @@ ssize_t receive_msg(struct file *filp, char *buf, size_t count, loff_t *offp )
 	return len;
 }
 
-// for mmap
-static int my_mmap(struct file *filp, struct vm_area_struct *vma) {
-	if (remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff, vma->vm_end - vma->vm_start, vma->vm_page_prot))
-		return -EIO;
-	vma->vm_ops = &mmap_vm_ops;
+int slave_mmap(struct file *filp, struct vm_area_struct *vma) {
+	if (vma->vm_end - vma->vm_start > MMAP_BUF_SIZE) {
+		pr_err("mmap requested size too large, aborting...");
+	}
 	vma->vm_flags |= VM_RESERVED;
-	vma->vm_private_data = filp->private_data;
-	mmap_open(vma);
+	int pfn = page_to_pfn(buffer);
+	int ret = remap_pfn_range(vma, vma->vm_start, pfn, vma->vm_end - vma->vm_start, vma->vm_page_prot);
+	if (ret < 0) {
+		return -EIO;
+	}
 	return 0;
 }
-
 
 
 module_init(slave_init);
