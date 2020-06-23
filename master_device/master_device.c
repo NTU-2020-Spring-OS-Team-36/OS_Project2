@@ -30,6 +30,8 @@
 #define master_IOCTL_EXIT 0x12345679
 #define BUF_SIZE 512
 
+#define MMAP_BUF_PAGES 1
+
 typedef struct socket * ksocket_t;
 
 struct dentry  *file1;//debug file
@@ -51,6 +53,8 @@ int master_open(struct inode *inode, struct file *filp);
 static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param);
 static ssize_t send_msg(struct file *file, const char __user *buf, size_t count, loff_t *data);//use when user is writing to this device
 
+int master_mmap(struct file *filp, struct vm_area_struct *vma);
+
 static ksocket_t sockfd_srv, sockfd_cli;//socket for master and socket for slave
 static struct sockaddr_in addr_srv;//address for master
 static struct sockaddr_in addr_cli;//address for slave
@@ -58,13 +62,16 @@ static mm_segment_t old_fs;
 static int addr_len;
 //static  struct mmap_info *mmap_msg; // pointer to the mapped data in this device
 
+static struct page *buffer;
+
 //file operations
 static struct file_operations master_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = master_ioctl,
 	.open = master_open,
 	.write = send_msg,
-	.release = master_close
+	.release = master_close,
+	.mmap = master_mmap
 };
 
 //device info
@@ -98,6 +105,8 @@ static int __init master_init(void)
 	addr_srv.sin_port = htons(DEFAULT_PORT);
 	addr_srv.sin_addr.s_addr = INADDR_ANY;
 	addr_len = sizeof(struct sockaddr_in);
+
+	buffer = alloc_pages(GFP_KERNEL, MMAP_BUF_PAGES);
 
 	sockfd_srv = ksocket(AF_INET, SOCK_STREAM, 0);
 	printk("sockfd_srv = 0x%p  socket is created \n", sockfd_srv);
@@ -175,6 +184,8 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			ret = 0;
 			break;
 		case master_IOCTL_MMAP:
+			data_size = ioctl_param;
+			ret = ksend(sockfd_cli, page_to_virt(buffer), data_size, 0);
 			break;
 		case master_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)
@@ -211,7 +222,18 @@ static ssize_t send_msg(struct file *file, const char __user *buf, size_t count,
 
 }
 
-
+int master_mmap(struct file *filp, struct vm_area_struct *vma) {
+	if (vma->vm_end - vma->vm_start > PAGE_SIZE * MMAP_BUF_PAGES) {
+		pr_err("mmap requested size too large, aborting...");
+	}
+	vma->vm_flags |= VM_RESERVED;
+	int pfn = page_to_pfn(buffer);
+	int ret = remap_pfn_range(vma, vma->vm_start, pfn, vma->vm_end - vma->vm_start, vma->vm_page_prot);
+	if (ret < 0) {
+		return -EIO;
+	}
+	return 0;
+}
 
 
 module_init(master_init);
