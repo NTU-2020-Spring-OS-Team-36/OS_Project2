@@ -24,6 +24,9 @@ int main (int argc, char* argv[])
 	double trans_time; //calulate the time between the device is opened and it is closed
 	char *kernel_address, *file_address;
 
+	strncpy(file_name, argv[1], 50);
+	strncpy(method, argv[2], 20);
+	strncpy(ip, argv[3], 20);
 
 	if( (dev_fd = open("/dev/slave_device", O_RDWR)) < 0)//should be O_RDWR for PROT_WRITE when mmap()
 	{
