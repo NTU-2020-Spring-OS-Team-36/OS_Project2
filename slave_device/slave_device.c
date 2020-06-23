@@ -67,11 +67,16 @@ void mmap_open(struct vm_area_struct *vma) {
 void mmap_close(struct vm_area_struct *vma) {
 	// do nothing
 }
-static int mmap_fault(struct vm_area_struct *vma, struct vm_fault *vmf) {
+
+/* TODO: make this func works normally or deprecate it
+
+static int mmap_fault(struct vm_fault *vmf, struct vm_area_struct *vma) {
 	vmf->page = virt_to_page(vma->vm_private_data);
 	get_page(vmf->page);
 	return 0;
 }
+
+*/
 
 //file operations
 static struct file_operations slave_fops = {
@@ -79,7 +84,7 @@ static struct file_operations slave_fops = {
 	.unlocked_ioctl = slave_ioctl,
 	.open = slave_open,
 	.read = receive_msg,
-	.release = slave_close
+	.release = slave_close,
 	.mmap = my_mmap 
 };
 
@@ -93,8 +98,7 @@ static struct miscdevice slave_dev = {
 // for mmap
 struct vm_operations_struct mmap_vm_ops = {
 	.open = mmap_open,
-	.close = mmap_close,
-	.fault = mmap_fault
+	.close = mmap_close
 };
 
 static int __init slave_init(void)

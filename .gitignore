@@ -1,0 +1,13 @@
+*
+!*.*
+!*/
+
+*.mod.c
+*.ko
+*.o
+*.order
+master_device/.*
+slave_device/.*
+ksocket/.*
+*.symvers
+sample_input/
