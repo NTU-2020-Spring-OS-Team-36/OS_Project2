@@ -78,15 +78,18 @@ int main(int argc, char *argv[]) {
 			int64_t ret = 0;
 			char *dev_mem =
 			    mmap(NULL, MMAP_BUF_SIZE, PROT_READ, MAP_SHARED, dev_fd, 0);
+			assert(dev_mem != (void*)-1);
 			for (;;) {
 				assert((ret = ioctl(dev_fd, SLAVE_IOCTL_MMAP)) >= 0 &&
 				       "mmap receiving failed");
 				if (!ret) break;
 				assert(ftruncate(file_fd, file_size + ret) == 0);
+				int64_t extra = file_size % PAGE_SIZE;
 				char *file_mem =
-				    mmap(NULL, ret, PROT_WRITE, MAP_SHARED, file_fd, file_size);
-				memcpy(file_mem, dev_mem, ret);
-				munmap(file_mem, ret);
+				    mmap(NULL, extra + ret, PROT_WRITE, MAP_SHARED, file_fd, file_size - extra);
+				assert(file_mem != (void*)-1);
+				memcpy(file_mem + extra, dev_mem, ret);
+				munmap(file_mem, extra + ret);
 				file_size += ret;
 			}
 		} else {
