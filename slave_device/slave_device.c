@@ -19,6 +19,7 @@
 #include <linux/debugfs.h>
 #include <linux/mm.h>
 #include <asm/page.h>
+#include <linux/async.h>
 
 
 #ifndef VM_RESERVED
@@ -28,6 +29,8 @@
 #define slave_IOCTL_CREATESOCK 0x12345677
 #define slave_IOCTL_MMAP 0x12345678
 #define slave_IOCTL_EXIT 0x12345679
+#define slave_IOCTL_MMAP_ASYNC_COMMIT 0x12345680
+#define slave_IOCTL_MMAP_ASYNC_CHECK 0x12345681
 
 
 #define BUF_SIZE 512
@@ -64,6 +67,8 @@ static ksocket_t sockfd_cli;//socket to the master server
 static struct sockaddr_in addr_srv; //address of the master server
 
 static struct page *buffer;
+static async_cookie_t async_cookie;
+static volatile long async_ret;
 
 //file operations
 static struct file_operations slave_fops = {
@@ -88,6 +93,7 @@ static int __init slave_init(void)
 	file1 = debugfs_create_file("slave_debug", 0644, NULL, NULL, &slave_fops);
 
 	buffer = alloc_pages(GFP_KERNEL, MMAP_BUF_PAGES_LOG);
+	async_ret = -1;
 
 	//register the device
 	if( (ret = misc_register(&slave_dev)) < 0){
@@ -119,6 +125,11 @@ int slave_open(struct inode *inode, struct file *filp)
 {
 	return 0;
 }
+
+static void recv_async(void *data, async_cookie_t cookie) {
+	async_ret = krecv(sockfd_cli, page_to_virt(buffer), MMAP_BUF_SIZE, 0);
+}
+
 static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
 	long ret = -EINVAL;
@@ -175,6 +186,14 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 			break;
 		case slave_IOCTL_MMAP:
 			ret = krecv(sockfd_cli, page_to_virt(buffer), MMAP_BUF_SIZE, 0);
+			break;
+		case slave_IOCTL_MMAP_ASYNC_COMMIT:
+			async_cookie = async_schedule(recv_async, NULL);
+			async_ret = -1;
+			ret = 0;
+			break;
+		case slave_IOCTL_MMAP_ASYNC_CHECK:
+			ret = async_ret;
 			break;
 		case slave_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)

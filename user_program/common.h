@@ -7,15 +7,19 @@
 #define MASTER_IOCTL_CREATESOCK 0x12345677
 #define MASTER_IOCTL_MMAP 0x12345678
 #define MASTER_IOCTL_EXIT 0x12345679
+#define MASTER_IOCTL_MMAP_ASYNC_COMMIT 0x12345680
+#define MASTER_IOCTL_MMAP_ASYNC_CHECK 0x12345681
 #define SLAVE_IOCTL_CREATESOCK 0x12345677
 #define SLAVE_IOCTL_MMAP 0x12345678
 #define SLAVE_IOCTL_EXIT 0x12345679
+#define SLAVE_IOCTL_MMAP_ASYNC_COMMIT 0x12345680
+#define SLAVE_IOCTL_MMAP_ASYNC_CHECK 0x12345681
 
 #define PAGE_SIZE 4096  // TODO: Not hardcode this
 #define MMAP_BUF_PAGES 1
 #define MMAP_BUF_SIZE PAGE_SIZE *MMAP_BUF_PAGES
 
-enum Method { FCNTL, MMAP };
+enum Method { FCNTL, MMAP, MMAP_ASYNC };
 
 static double ts_diff_to_milli(struct timespec *t0, struct timespec *t1) {
 	return (double)(t1->tv_sec - t0->tv_sec) * 1000 +

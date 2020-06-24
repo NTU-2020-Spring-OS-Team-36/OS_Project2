@@ -20,6 +20,7 @@
 #include <linux/mm.h>
 #include <asm/page.h>
 #include <asm/pgtable.h>
+#include <linux/async.h>
 #ifndef VM_RESERVED
 #define VM_RESERVED   (VM_DONTEXPAND | VM_DONTDUMP)
 #endif
@@ -28,6 +29,8 @@
 #define master_IOCTL_CREATESOCK 0x12345677
 #define master_IOCTL_MMAP 0x12345678
 #define master_IOCTL_EXIT 0x12345679
+#define master_IOCTL_MMAP_ASYNC_COMMIT 0x12345680
+#define master_IOCTL_MMAP_ASYNC_CHECK 0x12345681
 #define BUF_SIZE 512
 
 #define MMAP_BUF_PAGES_LOG 0
@@ -64,6 +67,8 @@ static int addr_len;
 //static  struct mmap_info *mmap_msg; // pointer to the mapped data in this device
 
 static struct page *buffer;
+static async_cookie_t async_cookie;
+static volatile long async_ret;
 
 //file operations
 static struct file_operations master_fops = {
@@ -108,6 +113,7 @@ static int __init master_init(void)
 	addr_len = sizeof(struct sockaddr_in);
 
 	buffer = alloc_pages(GFP_KERNEL, MMAP_BUF_PAGES_LOG);
+	async_ret = -1;
 
 	sockfd_srv = ksocket(AF_INET, SOCK_STREAM, 0);
 	printk("sockfd_srv = 0x%p  socket is created \n", sockfd_srv);
@@ -157,6 +163,10 @@ int master_open(struct inode *inode, struct file *filp)
 	return 0;
 }
 
+static void send_async(void *data, async_cookie_t cookie) {
+	size_t data_size = (size_t)data; // Dirty hack
+	async_ret = ksend(sockfd_cli, page_to_virt(buffer), data_size, 0);
+}
 
 static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
@@ -190,6 +200,16 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			data_size = ioctl_param;
 			if (data_size > MMAP_BUF_SIZE) data_size = MMAP_BUF_SIZE;
 			ret = ksend(sockfd_cli, page_to_virt(buffer), data_size, 0);
+			break;
+		case master_IOCTL_MMAP_ASYNC_COMMIT:
+			data_size = ioctl_param;
+			if (data_size > MMAP_BUF_SIZE) data_size = MMAP_BUF_SIZE;
+			async_cookie = async_schedule(send_async, (void*)data_size);
+			async_ret = -1;
+			ret = 0;
+			break;
+		case master_IOCTL_MMAP_ASYNC_CHECK:
+			ret = async_ret;
 			break;
 		case master_IOCTL_EXIT:
 			if(kclose(sockfd_cli) == -1)

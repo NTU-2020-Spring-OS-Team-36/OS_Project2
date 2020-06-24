@@ -25,7 +25,6 @@ int main(int argc, char *argv[]) {
 	char buf[BUF_SIZE];
 
 	int opt, method = -1;
-	bool async = false;
 	while ((opt = getopt(argc, argv, "fma")) != -1) {
 		switch (opt) {
 			case 'm':
@@ -35,7 +34,7 @@ int main(int argc, char *argv[]) {
 				method = FCNTL;
 				break;
 			case 'a':
-				async = true;
+				method = MMAP_ASYNC;
 				break;
 			default:
 				fprintf(stderr, "Usage: master [-fma] files...\n");
@@ -94,6 +93,26 @@ int main(int argc, char *argv[]) {
 				memcpy(dev_mem, file_mem, len);
 				assert(ioctl(dev_fd, MASTER_IOCTL_MMAP, len) >= 0 &&
 				       "mmap sending failed");
+				munmap(file_mem, len);
+			}
+		} else if (method == MMAP_ASYNC) {
+			char *dev_mem =
+			    mmap(NULL, MMAP_BUF_SIZE, PROT_WRITE, MAP_SHARED, dev_fd, 0);
+			while (offset < file_size) {
+				int64_t remain = file_size - offset;
+				int64_t len = remain < MMAP_BUF_SIZE ? remain : MMAP_BUF_SIZE;
+				char *file_mem =
+				    mmap(NULL, len, PROT_READ, MAP_SHARED, file_fd, offset);
+				offset += len;
+				memcpy(dev_mem, file_mem, len);
+				assert(ioctl(dev_fd, MASTER_IOCTL_MMAP_ASYNC_COMMIT, len) == 0 &&
+				       "mmap sending failed");
+				do {
+					struct timespec ts;
+					ts.tv_sec = 0;
+					ts.tv_nsec = 1000;
+					nanosleep(&ts, NULL);
+				} while (ioctl(dev_fd, MASTER_IOCTL_MMAP_ASYNC_CHECK) < 0);
 				munmap(file_mem, len);
 			}
 		} else {
