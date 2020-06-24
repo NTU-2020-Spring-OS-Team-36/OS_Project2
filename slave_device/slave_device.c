@@ -32,8 +32,8 @@
 
 #define BUF_SIZE 512
 
-#define MMAP_BUF_PAGES 1
-#define MMAP_BUF_SIZE PAGE_SIZE * MMAP_BUF_PAGES
+#define MMAP_BUF_PAGES_LOG 0
+#define MMAP_BUF_SIZE PAGE_SIZE * (1UL << MMAP_BUF_PAGES_LOG)
 
 
 
@@ -87,7 +87,7 @@ static int __init slave_init(void)
 	int ret;
 	file1 = debugfs_create_file("slave_debug", 0644, NULL, NULL, &slave_fops);
 
-	buffer = alloc_pages(GFP_KERNEL, MMAP_BUF_PAGES);
+	buffer = alloc_pages(GFP_KERNEL, MMAP_BUF_PAGES_LOG);
 
 	//register the device
 	if( (ret = misc_register(&slave_dev)) < 0){
@@ -105,6 +105,8 @@ static void __exit slave_exit(void)
 	misc_deregister(&slave_dev);
 	printk(KERN_INFO "slave exited!\n");
 	debugfs_remove(file1);
+
+	__free_pages(buffer, MMAP_BUF_PAGES_LOG);
 }
 
 
@@ -136,7 +138,7 @@ static long slave_ioctl(struct file *file, unsigned int ioctl_num, unsigned long
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
 
-    printk("slave device ioctl");
+    //printk("slave device ioctl");
 
 	switch(ioctl_num){
 		case slave_IOCTL_CREATESOCK:// create socket and connect to master
@@ -216,6 +218,7 @@ int slave_mmap(struct file *filp, struct vm_area_struct *vma) {
 	vma->vm_flags |= VM_RESERVED;
 	int pfn = page_to_pfn(buffer);
 	int ret = remap_pfn_range(vma, vma->vm_start, pfn, vma->vm_end - vma->vm_start, vma->vm_page_prot);
+	printk("%lX\n", buffer->flags);
 	if (ret < 0) {
 		return -EIO;
 	}

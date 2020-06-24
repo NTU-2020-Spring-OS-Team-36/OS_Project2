@@ -30,7 +30,8 @@
 #define master_IOCTL_EXIT 0x12345679
 #define BUF_SIZE 512
 
-#define MMAP_BUF_PAGES 1
+#define MMAP_BUF_PAGES_LOG 0
+#define MMAP_BUF_SIZE PAGE_SIZE * (1UL << MMAP_BUF_PAGES_LOG)
 
 typedef struct socket * ksocket_t;
 
@@ -106,7 +107,7 @@ static int __init master_init(void)
 	addr_srv.sin_addr.s_addr = INADDR_ANY;
 	addr_len = sizeof(struct sockaddr_in);
 
-	buffer = alloc_pages(GFP_KERNEL, MMAP_BUF_PAGES);
+	buffer = alloc_pages(GFP_KERNEL, MMAP_BUF_PAGES_LOG);
 
 	sockfd_srv = ksocket(AF_INET, SOCK_STREAM, 0);
 	printk("sockfd_srv = 0x%p  socket is created \n", sockfd_srv);
@@ -142,6 +143,8 @@ static void __exit master_exit(void)
 	set_fs(old_fs);
 	printk(KERN_INFO "master exited!\n");
 	debugfs_remove(file1);
+
+	__free_pages(buffer, MMAP_BUF_PAGES_LOG);
 }
 
 int master_close(struct inode *inode, struct file *filp)
@@ -185,6 +188,7 @@ static long master_ioctl(struct file *file, unsigned int ioctl_num, unsigned lon
 			break;
 		case master_IOCTL_MMAP:
 			data_size = ioctl_param;
+			if (data_size > MMAP_BUF_SIZE) data_size = MMAP_BUF_SIZE;
 			ret = ksend(sockfd_cli, page_to_virt(buffer), data_size, 0);
 			break;
 		case master_IOCTL_EXIT:
@@ -223,7 +227,7 @@ static ssize_t send_msg(struct file *file, const char __user *buf, size_t count,
 }
 
 int master_mmap(struct file *filp, struct vm_area_struct *vma) {
-	if (vma->vm_end - vma->vm_start > PAGE_SIZE * MMAP_BUF_PAGES) {
+	if (vma->vm_end - vma->vm_start > MMAP_BUF_SIZE) {
 		pr_err("mmap requested size too large, aborting...");
 	}
 	vma->vm_flags |= VM_RESERVED;
@@ -232,6 +236,7 @@ int master_mmap(struct file *filp, struct vm_area_struct *vma) {
 	if (ret < 0) {
 		return -EIO;
 	}
+	printk("%lX\n", buffer->flags);
 	return 0;
 }
 
