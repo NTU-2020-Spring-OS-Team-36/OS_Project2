@@ -35,15 +35,7 @@ int main(int argc, char *argv[]) {
 	struct timespec start, end;
 
 	if ((dev_fd = open("/dev/master_device", O_RDWR)) < 0) {
-		perror("failed to open /dev/master_device\n");
-		return errno;
-	}
-
-	if (ioctl(dev_fd, MASTER_IOCTL_CREATESOCK) ==
-	    -1)  // create socket and accept
-	         // the connection from the slave
-	{
-		perror("ioctl server create socket error\n");
+		perror("failed to open /dev/master_device");
 		return errno;
 	}
 
@@ -53,14 +45,20 @@ int main(int argc, char *argv[]) {
 
 	int64_t tot_file_size = 0;
 	for (int i = 0; i < n_files; i++) {
+		// create socket and accept the connection from the slave
+		if (ioctl(dev_fd, MASTER_IOCTL_CREATESOCK) == -1) {
+			perror("ioctl server create socket error");
+			return errno;
+		}
+
 		if ((file_fd = open(filename[i], O_RDWR)) < 0) {
-			perror("failed to open input file\n");
+			perror("failed to open input file");
 			return errno;
 		}
 
 		int64_t file_size = 0, offset = 0;
 		if ((file_size = get_filesize(filename[i])) < 0) {
-			perror("failed to get filesize\n");
+			perror("failed to get filesize");
 			return errno;
 		}
 
@@ -81,18 +79,17 @@ int main(int argc, char *argv[]) {
 				offset += len;
 				memcpy(dev_mem, file_mem, len);
 				assert(ioctl(dev_fd, MASTER_IOCTL_MMAP, len) >= 0 &&
-						"mmap sending failed");
+				       "mmap sending failed");
 				munmap(file_mem, len);
 			}
 		} else {
-			fprintf(stderr, "Operation not supported\n");
+			fprintf(stderr, "Operation not supported");
 			return EXIT_FAILURE;
 		}
 
-		if (ioctl(dev_fd, MASTER_IOCTL_EXIT) ==
-		    -1)  // end sending data, close the connection
-		{
-			perror("ioclt server exits error\n");
+		// end sending data, close the connection
+		if (ioctl(dev_fd, MASTER_IOCTL_EXIT) == -1) {
+			perror("ioctl server exits error");
 			return 1;
 		}
 

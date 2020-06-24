@@ -30,17 +30,9 @@ int main(int argc, char *argv[]) {
 	int dev_fd, file_fd;
 	struct timespec start, end;
 
-	if ((dev_fd = open("/dev/slave_device", O_RDWR)) <
-	    0)  // should be O_RDWR for PROT_WRITE when mmap()
-	{
+	// should be O_RDWR for PROT_WRITE when mmap()
+	if ((dev_fd = open("/dev/slave_device", O_RDWR)) < 0) {
 		perror("failed to open /dev/slave_device");
-		return errno;
-	}
-
-	if (ioctl(dev_fd, SLAVE_IOCTL_CREATESOCK, ip) ==
-	    -1)  // connect to master in the device
-	{
-		perror("ioctl create slave socket error");
 		return errno;
 	}
 
@@ -50,6 +42,12 @@ int main(int argc, char *argv[]) {
 
 	int64_t tot_file_size = 0;
 	for (int i = 0; i < n_files; i++) {
+		// connect to master in the device
+		if (ioctl(dev_fd, SLAVE_IOCTL_CREATESOCK, ip) == -1) {
+			perror("ioctl create slave socket error");
+			return errno;
+		}
+
 		if ((file_fd = open(filename[i], O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0) {
 			perror("failed to open input file");
 			return errno;
@@ -83,9 +81,8 @@ int main(int argc, char *argv[]) {
 			return EXIT_FAILURE;
 		}
 
-		if (ioctl(dev_fd, SLAVE_IOCTL_EXIT) ==
-		    -1)  // end receiving data, close the connection
-		{
+		// end receiving data, close the connection
+		if (ioctl(dev_fd, SLAVE_IOCTL_EXIT) == -1) {
 			perror("ioctl client exits error");
 			return errno;
 		}
