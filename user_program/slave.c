@@ -14,8 +14,9 @@
 
 #include "common.h"
 
-int main(int argc, char *argv[]) { 
-	char buf[BUF_SIZE], filename[FILE_NUM][FILENAME_LEN], method[METHOD_LEN], ip[IP_LEN];
+int main(int argc, char *argv[]) {
+	char buf[BUF_SIZE], filename[FILE_NUM][FILENAME_LEN], method[METHOD_LEN],
+	    ip[IP_LEN];
 	int n_files;
 
 	sscanf(argv[1], "%d", &n_files);
@@ -45,10 +46,10 @@ int main(int argc, char *argv[]) {
 
 	fprintf(stderr, "ioctl success\n");
 
-	assert(clock_gettime(CLOCK_MONOTONIC, &start) == 0); 
+	assert(clock_gettime(CLOCK_MONOTONIC, &start) == 0);
 
 	int64_t tot_file_size = 0;
-	for (int i = 0; i < n_files; i++) { 
+	for (int i = 0; i < n_files; i++) {
 		if ((file_fd = open(filename[i], O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0) {
 			perror("failed to open input file");
 			return errno;
@@ -64,35 +65,30 @@ int main(int argc, char *argv[]) {
 			} while (ret > 0);
 		} else if (strcmp(method, "mmap") == 0) {
 			int64_t ret = 0;
-			char *dev_mem = mmap(NULL, MMAP_BUF_SIZE, PROT_READ, MAP_SHARED, dev_fd, 0);
-
-			do {
+			char *dev_mem =
+			    mmap(NULL, MMAP_BUF_SIZE, PROT_READ, MAP_SHARED, dev_fd, 0);
+			for (;;) {
 				assert((ret = ioctl(dev_fd, SLAVE_IOCTL_MMAP)) >= 0 &&
-						"mmap receiving failed");
+				       "mmap receiving failed");
+				if (!ret) break;
 				ftruncate(file_fd, file_size + ret);
-				char *file_mem = mmap(NULL, ret, PROT_WRITE, MAP_SHARED, file_fd, file_size);
-				memcpy(file_mem, dev_mem, ret);	
-
+				char *file_mem =
+				    mmap(NULL, ret, PROT_WRITE, MAP_SHARED, file_fd, file_size);
+				memcpy(file_mem, dev_mem, ret);
 				munmap(file_mem, ret);
 				file_size += ret;
-			} while(ret > 0);
-			//do {
-			//	assert((ret = ioctl(dev_fd, SLAVE_IOCTL_MMAP)) >= 0 &&
-			//			"mmap receiving failed");
-			//	assert(write(file_fd, dev_mem, ret) >= 0);
-			//	file_size += ret;
-			//} while (ret > 0);
+			}
 		} else {
 			fprintf(stderr, "Operation not supported\n");
 			return EXIT_FAILURE;
 		}
 
 		if (ioctl(dev_fd, SLAVE_IOCTL_EXIT) ==
-				-1)  // end receiving data, close the connection
+		    -1)  // end receiving data, close the connection
 		{
 			perror("ioctl client exits error");
 			return errno;
-		} 
+		}
 
 		tot_file_size += file_size;
 	}
@@ -100,5 +96,5 @@ int main(int argc, char *argv[]) {
 	assert(clock_gettime(CLOCK_MONOTONIC, &end) == 0);
 	double trans_time = ts_diff_to_milli(&start, &end);
 	printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time,
-			tot_file_size);
+	       tot_file_size);
 }

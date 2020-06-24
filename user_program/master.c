@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
 	assert(clock_gettime(CLOCK_MONOTONIC, &start) == 0);
 
 	int64_t tot_file_size = 0;
-	for (int i = 0; i < n_files; i++) { 
+	for (int i = 0; i < n_files; i++) {
 		if ((file_fd = open(filename[i], O_RDWR)) < 0) {
 			perror("failed to open input file\n");
 			return errno;
@@ -71,29 +71,26 @@ int main(int argc, char *argv[]) {
 				assert(write(dev_fd, buf, ret) >= 0);   // write to the the device
 			} while (ret > 0);
 		} else if (strcmp(method, "mmap") == 0) {
-			int64_t ret = 0;
 			char *dev_mem =
-				mmap(NULL, MMAP_BUF_SIZE, PROT_WRITE, MAP_SHARED, dev_fd, 0);
-
-			while(offset < file_size) {
-				int64_t len = file_size - offset >= MMAP_BUF_SIZE ? MMAP_BUF_SIZE : file_size;
-				char *file_mem = mmap(NULL, len, PROT_READ, MAP_SHARED, file_fd, offset);
+			    mmap(NULL, MMAP_BUF_SIZE, PROT_WRITE, MAP_SHARED, dev_fd, 0);
+			while (offset < file_size) {
+				int64_t remain = file_size - offset;
+				int64_t len = remain < MMAP_BUF_SIZE ? remain : MMAP_BUF_SIZE;
+				char *file_mem =
+				    mmap(NULL, len, PROT_READ, MAP_SHARED, file_fd, offset);
 				offset += len;
 				memcpy(dev_mem, file_mem, len);
+				assert(ioctl(dev_fd, MASTER_IOCTL_MMAP, len) >= 0 &&
+						"mmap sending failed");
 				munmap(file_mem, len);
 			}
-			//do {
-			//	ret = read(file_fd, dev_mem, MMAP_BUF_SIZE);  // read from the input file
-			//	assert(ioctl(dev_fd, MASTER_IOCTL_MMAP, ret) >= 0 &&
-			//			"mmap sending failed");
-			//} while (ret > 0);
 		} else {
 			fprintf(stderr, "Operation not supported\n");
 			return EXIT_FAILURE;
 		}
 
 		if (ioctl(dev_fd, MASTER_IOCTL_EXIT) ==
-				-1)  // end sending data, close the connection
+		    -1)  // end sending data, close the connection
 		{
 			perror("ioclt server exits error\n");
 			return 1;
@@ -103,7 +100,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	assert(clock_gettime(CLOCK_MONOTONIC, &end) == 0);
-	double trans_time = ts_diff_to_milli(&start, &end); 
+	double trans_time = ts_diff_to_milli(&start, &end);
 	printf("Transmission time: %lf ms, File size: %ld bytes\n", trans_time,
-			tot_file_size);
+	       tot_file_size);
 }
