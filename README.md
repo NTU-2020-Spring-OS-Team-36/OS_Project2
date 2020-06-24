@@ -14,7 +14,8 @@ sh compile.sh
 ### Test
 
 ```
-sudo sh test.sh <test_files_directory> <method> <ip_address>
+./master [-fma] [files]...
+./slave [-fma] ip_address [files]...
 ```
 
 e.g. `sudo sh test.sh sample_input/sample_input_1 mmap 127.0.0.1`
