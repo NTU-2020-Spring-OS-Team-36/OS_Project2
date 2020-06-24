@@ -10,4 +10,5 @@ master_device/.*
 slave_device/.*
 ksocket/.*
 *.symvers
-sample_input/
+input/
+output/
