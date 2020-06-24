@@ -18,8 +18,6 @@ sh compile.sh
 ./slave [-fma] ip_address [files]...
 ```
 
-e.g. `sudo sh test.sh sample_input/sample_input_1 mmap 127.0.0.1`
-
 The test script will iterate through all the files in the specified directory and send all of them as the input file of user programs. The received file of slaved would be saved in the `output/` directory.
 
 For further info, please checkout `test.sh`. Feel free to modify it.
