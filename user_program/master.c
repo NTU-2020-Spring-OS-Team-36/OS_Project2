@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
 			return errno;
 		}
 
-		int64_t file_size = 0, offset;
+		int64_t file_size = 0, offset = 0;
 		if ((file_size = get_filesize(filename[i])) < 0) {
 			perror("failed to get filesize\n");
 			return errno;
@@ -74,11 +74,19 @@ int main(int argc, char *argv[]) {
 			int64_t ret = 0;
 			char *dev_mem =
 				mmap(NULL, MMAP_BUF_SIZE, PROT_WRITE, MAP_SHARED, dev_fd, 0);
-			do {
-				ret = read(file_fd, dev_mem, MMAP_BUF_SIZE);  // read from the input file
-				assert(ioctl(dev_fd, MASTER_IOCTL_MMAP, ret) >= 0 &&
-						"mmap sending failed");
-			} while (ret > 0);
+
+			while(offset < file_size) {
+				int64_t len = file_size - offset >= MMAP_BUF_SIZE ? MMAP_BUF_SIZE : file_size;
+				char *file_mem = mmap(NULL, len, PROT_READ, MAP_SHARED, file_fd, offset);
+				offset += len;
+				memcpy(dev_mem, file_mem, len);
+				munmap(file_mem, len);
+			}
+			//do {
+			//	ret = read(file_fd, dev_mem, MMAP_BUF_SIZE);  // read from the input file
+			//	assert(ioctl(dev_fd, MASTER_IOCTL_MMAP, ret) >= 0 &&
+			//			"mmap sending failed");
+			//} while (ret > 0);
 		} else {
 			fprintf(stderr, "Operation not supported\n");
 			return EXIT_FAILURE;

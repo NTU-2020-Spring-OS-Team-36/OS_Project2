@@ -65,12 +65,23 @@ int main(int argc, char *argv[]) {
 		} else if (strcmp(method, "mmap") == 0) {
 			int64_t ret = 0;
 			char *dev_mem = mmap(NULL, MMAP_BUF_SIZE, PROT_READ, MAP_SHARED, dev_fd, 0);
+
 			do {
 				assert((ret = ioctl(dev_fd, SLAVE_IOCTL_MMAP)) >= 0 &&
 						"mmap receiving failed");
-				assert(write(file_fd, dev_mem, ret) >= 0);
+				ftruncate(file_fd, file_size + ret);
+				char *file_mem = mmap(NULL, ret, PROT_WRITE, MAP_SHARED, file_fd, file_size);
+				memcpy(file_mem, dev_mem, ret);	
+
+				munmap(file_mem, ret);
 				file_size += ret;
-			} while (ret > 0);
+			} while(ret > 0);
+			//do {
+			//	assert((ret = ioctl(dev_fd, SLAVE_IOCTL_MMAP)) >= 0 &&
+			//			"mmap receiving failed");
+			//	assert(write(file_fd, dev_mem, ret) >= 0);
+			//	file_size += ret;
+			//} while (ret > 0);
 		} else {
 			fprintf(stderr, "Operation not supported\n");
 			return EXIT_FAILURE;
