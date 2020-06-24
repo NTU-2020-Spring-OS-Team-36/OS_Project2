@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -15,17 +16,26 @@
 #include "common.h"
 
 int main(int argc, char *argv[]) {
-	char buf[BUF_SIZE], filename[FILE_NUM][FILENAME_LEN], method[METHOD_LEN],
-	    ip[IP_LEN];
-	int n_files;
+	char buf[BUF_SIZE];
 
-	sscanf(argv[1], "%d", &n_files);
-	assert(argc == n_files + 4);
-	for (int i = 0; i < n_files; i++) {
-		strncpy(filename[i], argv[2 + i], FILENAME_LEN);
+	int opt, method = -1;
+	bool async = false;
+	while ((opt = getopt(argc, argv, "fma")) != -1) {
+		switch (opt) {
+			case 'm':
+				method = MMAP;
+				break;
+			case 'f':
+				method = FCNTL;
+				break;
+			case 'a':
+				async = true;
+				break;
+			default:
+				fprintf(stderr, "Usage: slave [-fma] server files...\n");
+				return EXIT_FAILURE;
+		}
 	}
-	strncpy(method, argv[argc - 2], METHOD_LEN);
-	strncpy(ip, argv[argc - 1], IP_LEN);
 
 	int dev_fd, file_fd;
 	struct timespec start, end;
@@ -40,28 +50,31 @@ int main(int argc, char *argv[]) {
 
 	assert(clock_gettime(CLOCK_MONOTONIC, &start) == 0);
 
+	const char *ip = argv[optind];
 	int64_t tot_file_size = 0;
-	for (int i = 0; i < n_files; i++) {
+	for (int i = optind + 1; i < argc; i++) {
+		const char *filename = argv[i];
+
 		// connect to master in the device
 		if (ioctl(dev_fd, SLAVE_IOCTL_CREATESOCK, ip) == -1) {
 			perror("ioctl create slave socket error");
 			return errno;
 		}
 
-		if ((file_fd = open(filename[i], O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0) {
+		if ((file_fd = open(filename, O_RDWR | O_CREAT | O_TRUNC, 0666)) < 0) {
 			perror("failed to open input file");
 			return errno;
 		}
 
 		int64_t file_size = 0;
-		if (strcmp(method, "fcntl") == 0) {
+		if (method == FCNTL) {
 			int64_t ret = 0;
 			do {
 				ret = read(dev_fd, buf, sizeof(buf));  // read from the the device
-				write(file_fd, buf, ret);              // write to the input file
+				assert(write(file_fd, buf, ret) == ret);              // write to the input file
 				file_size += ret;
 			} while (ret > 0);
-		} else if (strcmp(method, "mmap") == 0) {
+		} else if (method == MMAP) {
 			int64_t ret = 0;
 			char *dev_mem =
 			    mmap(NULL, MMAP_BUF_SIZE, PROT_READ, MAP_SHARED, dev_fd, 0);
@@ -69,7 +82,7 @@ int main(int argc, char *argv[]) {
 				assert((ret = ioctl(dev_fd, SLAVE_IOCTL_MMAP)) >= 0 &&
 				       "mmap receiving failed");
 				if (!ret) break;
-				ftruncate(file_fd, file_size + ret);
+				assert(ftruncate(file_fd, file_size + ret) == 0);
 				char *file_mem =
 				    mmap(NULL, ret, PROT_WRITE, MAP_SHARED, file_fd, file_size);
 				memcpy(file_mem, dev_mem, ret);

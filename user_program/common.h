@@ -13,7 +13,9 @@
 
 #define PAGE_SIZE 4096  // TODO: Not hardcode this
 #define MMAP_BUF_PAGES 1
-#define MMAP_BUF_SIZE PAGE_SIZE * MMAP_BUF_PAGES
+#define MMAP_BUF_SIZE PAGE_SIZE *MMAP_BUF_PAGES
+
+enum Method { FCNTL, MMAP };
 
 static double ts_diff_to_milli(struct timespec *t0, struct timespec *t1) {
 	return (double)(t1->tv_sec - t0->tv_sec) * 1000 +
